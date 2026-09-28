@@ -8,24 +8,27 @@ export const db = createClient({
   authToken,
 });
 
-// Ensure table exists on first connection
 export async function initDb() {
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY,
-      handle TEXT NOT NULL,
-      score REAL NOT NULL,
-      metrics TEXT NOT NULL,
-      image_data TEXT NOT NULL,
-      ip_address TEXT DEFAULT 'Unknown',
-      city TEXT DEFAULT 'Unknown',
-      region TEXT DEFAULT 'Unknown',
-      country TEXT DEFAULT 'Unknown',
-      latitude REAL,
-      longitude REAL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        id TEXT PRIMARY KEY,
+        handle TEXT NOT NULL,
+        score REAL NOT NULL,
+        metrics TEXT NOT NULL,
+        image_data TEXT NOT NULL,
+        ip_address TEXT DEFAULT 'Unknown',
+        city TEXT DEFAULT 'Unknown',
+        region TEXT DEFAULT 'Unknown',
+        country TEXT DEFAULT 'Unknown',
+        latitude REAL,
+        longitude REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (err) {
+    console.error('[DB INIT ERROR]:', err);
+  }
 }
 
 export async function saveSubmission(entry: any) {
@@ -58,6 +61,11 @@ export async function saveSubmission(entry: any) {
 
 export async function getAllSubmissions() {
   await initDb();
-  const res = await db.execute("SELECT * FROM submissions ORDER BY created_at DESC");
-  return res.rows;
+  try {
+    const res = await db.execute("SELECT * FROM submissions ORDER BY created_at DESC");
+    return res.rows;
+  } catch (err) {
+    console.error('[DB SELECT ERROR]:', err);
+    return [];
+  }
 }

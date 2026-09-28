@@ -6,6 +6,7 @@ import { RefreshCcw, MapPin, Globe, Clock, ShieldAlert } from 'lucide-react';
 export default function AdminPortal() {
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   const fetchEntries = useCallback(async () => {
@@ -14,10 +15,14 @@ export default function AdminPortal() {
       if (res.ok) {
         const data = await res.json();
         setEntries(data.submissions || []);
+        setError(null);
         setLastRefreshed(new Date());
+      } else {
+        setError('Failed to fetch data');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch admin data', e);
+      setError(e.message || 'Error fetching data');
     } finally {
       setLoading(false);
     }
@@ -25,7 +30,7 @@ export default function AdminPortal() {
 
   useEffect(() => {
     fetchEntries();
-    const interval = setInterval(fetchEntries, 2500);
+    const interval = setInterval(fetchEntries, 3000);
     return () => clearInterval(interval);
   }, [fetchEntries]);
 
@@ -44,9 +49,10 @@ export default function AdminPortal() {
           </div>
           
           <div className="flex items-center gap-6">
+            {error && <span className="text-red-500 text-sm">{error}</span>}
             <div className="flex items-center gap-2 px-4 py-2 bg-black/50 rounded-full border border-emerald-500/20">
               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="text-emerald-400 text-xs font-bold tracking-widest uppercase">Auto-Refresh (2.5s)</span>
+              <span className="text-emerald-400 text-xs font-bold tracking-widest uppercase">Auto-Refresh (3s)</span>
             </div>
             
             <button 
@@ -61,9 +67,9 @@ export default function AdminPortal() {
 
         {/* Entries List */}
         <div className="grid gap-4">
-          {entries.length === 0 && !loading && (
+          {entries.length === 0 && !loading && !error && (
             <div className="text-center py-20 bg-zinc-900/50 rounded-2xl border border-zinc-800">
-              <p className="text-zinc-500 font-medium">No verified entries yet.</p>
+              <p className="text-zinc-500 font-medium">No Submissions Yet - Waiting for Scans</p>
             </div>
           )}
           
