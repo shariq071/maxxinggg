@@ -1,76 +1,63 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient } from '@libsql/client';
 
-// Singleton instance to prevent multiple DB connections during dev hot-reloads
-let db: Database.Database;
+const url = process.env.TURSO_DATABASE_URL || 'file:data/maxxing.db';
+const authToken = process.env.TURSO_AUTH_TOKEN;
 
-export function getDb() {
-  if (!db) {
-    const dbPath = path.join(process.cwd(), 'data', 'maxxing.db');
-    db = new Database(dbPath);
-    
-    // Create submissions table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS submissions (
-        id TEXT PRIMARY KEY,
-        handle TEXT NOT NULL,
-        score REAL NOT NULL,
-        metrics TEXT NOT NULL,
-        image_data TEXT NOT NULL,
-        ip_address TEXT DEFAULT 'Unknown',
-        city TEXT DEFAULT 'Unknown',
-        region TEXT DEFAULT 'Unknown',
-        country TEXT DEFAULT 'Unknown',
-        latitude REAL,
-        longitude REAL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-  }
-  return db;
-}
+export const db = createClient({
+  url,
+  authToken,
+});
 
-export type SubmissionEntry = {
-  id: string;
-  handle: string;
-  score: number;
-  metrics: string;
-  image_data: string;
-  ip_address?: string;
-  city?: string;
-  region?: string;
-  country?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-};
-
-export function saveSubmission(entry: SubmissionEntry) {
-  const database = getDb();
-  
-  const stmt = database.prepare(`
-    INSERT INTO submissions (
-      id, handle, score, metrics, image_data, ip_address, city, region, country, latitude, longitude
-    ) VALUES (
-      @id, @handle, @score, @metrics, @image_data, @ip_address, @city, @region, @country, @latitude, @longitude
-    )
+// Ensure table exists on first connection
+export async function initDb() {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS submissions (
+      id TEXT PRIMARY KEY,
+      handle TEXT NOT NULL,
+      score REAL NOT NULL,
+      metrics TEXT NOT NULL,
+      image_data TEXT NOT NULL,
+      ip_address TEXT DEFAULT 'Unknown',
+      city TEXT DEFAULT 'Unknown',
+      region TEXT DEFAULT 'Unknown',
+      country TEXT DEFAULT 'Unknown',
+      latitude REAL,
+      longitude REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
-
-  return stmt.run({
-    id: entry.id,
-    handle: entry.handle,
-    score: entry.score,
-    metrics: entry.metrics,
-    image_data: entry.image_data,
-    ip_address: entry.ip_address ?? null,
-    city: entry.city ?? null,
-    region: entry.region ?? null,
-    country: entry.country ?? null,
-    latitude: entry.latitude ?? null,
-    longitude: entry.longitude ?? null,
-  });
 }
 
-export function getAllSubmissions() {
-  const database = getDb();
-  return database.prepare('SELECT * FROM submissions ORDER BY created_at DESC').all();
+export async function saveSubmission(entry: any) {
+  await initDb();
+  const id = entry.id || `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const metricsStr = typeof entry.metrics === 'string' ? entry.metrics : JSON.stringify(entry.metrics || {});
+
+  await db.execute({
+    sql: `
+      INSERT INTO submissions (id, handle, score, metrics, image_data, ip_address, city, region, country, latitude, longitude)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      id,
+      entry.handle || 'anonymous',
+      typeof entry.score === 'number' ? entry.score : 6.5,
+      metricsStr,
+      entry.imageData || entry.image_data || '',
+      entry.ip_address ?? 'Unknown',
+      entry.city ?? 'Unknown',
+      entry.region ?? 'Unknown',
+      entry.country ?? 'Unknown',
+      entry.latitude ?? null,
+      entry.longitude ?? null,
+    ],
+  });
+
+  return id;
+}
+
+export async function getAllSubmissions() {
+  await initDb();
+  const res = await db.execute("SELECT * FROM submissions ORDER BY created_at DESC");
+  return res.rows;
 }
